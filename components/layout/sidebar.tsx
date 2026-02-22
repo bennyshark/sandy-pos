@@ -17,7 +17,8 @@ import {
 import { signOut } from "next-auth/react"
 import { useState } from "react"
 
-const allNavItems = [
+// AFTER
+const navItems = [
   { href: "/pos",       label: "POS Terminal",  icon: ShoppingCart,    roles: ["OWNER", "MANAGER", "CASHIER"] },
   { href: "/kitchen",   label: "Kitchen View",  icon: ChefHat,         roles: ["OWNER", "MANAGER", "KITCHEN"] },
   { href: "/dashboard", label: "Dashboard",     icon: LayoutDashboard, roles: ["OWNER", "MANAGER"] },
