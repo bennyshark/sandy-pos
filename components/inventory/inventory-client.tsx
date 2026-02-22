@@ -217,7 +217,7 @@ function AdjustModal({
                 value={inputVal}
                 onChange={(e) => handleInput(e.target.value)}
                 min={mode === "set" ? "0" : undefined}
-                className="flex-1 h-11 rounded-xl border-2 border-primary/30 bg-background text-center text-xl font-bold focus:outline-none focus:border-primary transition-colors"
+                className="flex-1 h-11 rounded-xl border-2 border-primary/30 bg-background text-center text-xl font-bold focus:outline-none focus:border-primary transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
               <button
                 onClick={() => step(1)}
@@ -538,6 +538,7 @@ export function InventoryClient({ initialItems }: InventoryClientProps) {
                 const minStock = parseFloat(item.lowStockThreshold)
                 const status = getStockStatus(stock, minStock)
                 const low = stock > 0 && stock <= minStock
+                const out = stock <= 0
 
                 return (
                   <tr key={item.id} className={`transition-colors ${status.row}`}>
@@ -561,7 +562,7 @@ export function InventoryClient({ initialItems }: InventoryClientProps) {
                     </td>
                     <td className="px-5 py-4 text-right">
                       <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium border ${status.bg}`}>
-                        {low && <AlertTriangle size={10} />}
+                        {(low || out) && <AlertTriangle size={10} />}
                         {status.label}
                       </span>
                     </td>
