@@ -16,6 +16,63 @@ interface MenuClientProps {
   initialCategories: Category[]
 }
 
+// ── Moved outside MenuClient so React sees stable references on every render ──
+
+const inputClass =
+  "w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+
+function Field({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <div>
+      <label className="text-sm font-medium text-foreground mb-1.5 block">
+        {label}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+function Modal({
+  show,
+  onClose,
+  title,
+  children,
+  footer,
+}: {
+  show: boolean
+  onClose: () => void
+  title: string
+  children: React.ReactNode
+  footer: React.ReactNode
+}) {
+  if (!show) return null
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-card rounded-3xl shadow-2xl w-full max-w-md border border-border animate-fade-in">
+        <div className="flex items-center justify-between p-5 border-b border-border">
+          <h2 className="font-semibold text-foreground text-base">{title}</h2>
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-muted rounded-xl transition-colors"
+          >
+            <X size={16} className="text-muted-foreground" />
+          </button>
+        </div>
+        <div className="p-5 space-y-4">{children}</div>
+        <div className="p-5 border-t border-border flex gap-3">{footer}</div>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function MenuClient({
   initialProducts,
   initialCategories,
@@ -68,6 +125,8 @@ export function MenuClient({
         price: pPrice,
         categoryId: pCategoryId || null,
         isAvailable: pAvailable,
+        sortOrder: 0,
+        trackInventory: false,
       }
       if (editingProduct) {
         const r = await updateProduct(editingProduct.id, data)
@@ -100,9 +159,7 @@ export function MenuClient({
     startTransition(async () => {
       await toggleProductAvailability(id, !current)
       setProducts((prev) =>
-        prev.map((p) =>
-          p.id === id ? { ...p, isAvailable: !current } : p
-        )
+        prev.map((p) => (p.id === id ? { ...p, isAvailable: !current } : p))
       )
     })
   }
@@ -110,7 +167,12 @@ export function MenuClient({
   const handleSaveCategory = () => {
     if (!cName) return
     startTransition(async () => {
-      const r = await createCategory({ name: cName, emoji: cEmoji })
+      const r = await createCategory({
+        name: cName,
+        emoji: cEmoji,
+        color: "#6b7280",
+        sortOrder: categories.length + 1,
+      })
       if (r.success && r.data) {
         setCategories((prev) => [...prev, r.data as Category])
         setCName("")
@@ -128,57 +190,6 @@ export function MenuClient({
       setCategories((prev) => prev.filter((c) => c.id !== id))
     })
   }
-
-  const Modal = ({
-    show,
-    onClose,
-    title,
-    children,
-    footer,
-  }: {
-    show: boolean
-    onClose: () => void
-    title: string
-    children: React.ReactNode
-    footer: React.ReactNode
-  }) => {
-    if (!show) return null
-    return (
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div className="bg-card rounded-3xl shadow-2xl w-full max-w-md border border-border animate-fade-in">
-          <div className="flex items-center justify-between p-5 border-b border-border">
-            <h2 className="font-semibold text-foreground text-base">{title}</h2>
-            <button
-              onClick={onClose}
-              className="p-1.5 hover:bg-muted rounded-xl transition-colors"
-            >
-              <X size={16} className="text-muted-foreground" />
-            </button>
-          </div>
-          <div className="p-5 space-y-4">{children}</div>
-          <div className="p-5 border-t border-border flex gap-3">{footer}</div>
-        </div>
-      </div>
-    )
-  }
-
-  const Field = ({
-    label,
-    children,
-  }: {
-    label: string
-    children: React.ReactNode
-  }) => (
-    <div>
-      <label className="text-sm font-medium text-foreground mb-1.5 block">
-        {label}
-      </label>
-      {children}
-    </div>
-  )
-
-  const inputClass =
-    "w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
 
   return (
     <div className="space-y-5">
@@ -233,9 +244,7 @@ export function MenuClient({
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center">
-                  <span className="text-2xl">
-                    {p.category?.emoji ?? "🍽️"}
-                  </span>
+                  <span className="text-2xl">{p.category?.emoji ?? "🍽️"}</span>
                 </div>
                 <div className="flex gap-1">
                   <button
