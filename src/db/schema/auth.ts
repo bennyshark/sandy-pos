@@ -4,8 +4,8 @@ import {
   timestamp,
   primaryKey,
   integer,
-} from "drizzle-orm/pg-core"
-import type { AdapterAccountType } from "next-auth/adapters"
+} from "drizzle-orm/pg-core";
+import type { AdapterAccountType } from "next-auth/adapters";
 
 export const users = pgTable("users", {
   id: text("id")
@@ -15,11 +15,11 @@ export const users = pgTable("users", {
   email: text("email").unique(),
   emailVerified: timestamp("email_verified", { mode: "date" }),
   image: text("image"),
-  role: text("role", { enum: ["OWNER", "MANAGER", "CASHIER"] })
+  role: text("role", { enum: ["OWNER", "MANAGER", "CASHIER", "KITCHEN"] })
     .default("CASHIER")
     .notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-})
+});
 
 export const accounts = pgTable(
   "accounts",
@@ -39,7 +39,7 @@ export const accounts = pgTable(
     session_state: text("session_state"),
   },
   (t) => [primaryKey({ columns: [t.provider, t.providerAccountId] })]
-)
+);
 
 export const sessions = pgTable("sessions", {
   sessionToken: text("session_token").primaryKey(),
@@ -47,7 +47,7 @@ export const sessions = pgTable("sessions", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   expires: timestamp("expires", { mode: "date" }).notNull(),
-})
+});
 
 export const verificationTokens = pgTable(
   "verification_tokens",
@@ -57,4 +57,4 @@ export const verificationTokens = pgTable(
     expires: timestamp("expires", { mode: "date" }).notNull(),
   },
   (t) => [primaryKey({ columns: [t.identifier, t.token] })]
-)
+);

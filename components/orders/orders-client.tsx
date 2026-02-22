@@ -1,107 +1,289 @@
-"use client"
-import { useState, useTransition } from "react"
-import { updateOrderStatus } from "@/lib/actions/orders"
+"use client";
+import { useState, useTransition, useMemo } from "react";
+import { updateOrderStatus } from "@/lib/actions/orders";
 import {
   formatCurrency,
   formatDateTime,
   getStatusColor,
   getPaymentIcon,
-} from "@/lib/utils"
-import { ExternalLink } from "lucide-react"
-import type { StoreSettings } from "@/types"
-
-const ALL_STATUSES = [
-  "PENDING",
-  "PREPARING",
-  "READY",
-  "COMPLETED",
-  "CANCELLED",
-]
+} from "@/lib/utils";
+import { ExternalLink, Search, SlidersHorizontal } from "lucide-react";
+import type { StoreSettings } from "@/types";
 
 type OrderItem = {
-  productName: string
-  quantity: number
-  subtotal: string
-}
+  productName: string;
+  quantity: number;
+  subtotal: string;
+};
 
 type Order = {
-  id: string
-  orderNumber: string
-  status: string
-  type: string
-  tableNumber: string | null
-  customerName: string | null
-  subtotal: string
-  discountAmount: string
-  taxAmount: string
-  total: string
-  paymentMethod: string | null
-  receiptToken: string | null
-  createdAt: Date
-  items: OrderItem[]
-  cashier?: { name: string | null } | null
-}
+  id: string;
+  orderNumber: string;
+  status: string;
+  type: string;
+  tableNumber: string | null;
+  customerName: string | null;
+  subtotal: string;
+  discountAmount: string;
+  taxAmount: string;
+  total: string;
+  paymentMethod: string | null;
+  receiptToken: string | null;
+  createdAt: Date;
+  items: OrderItem[];
+  cashier?: { name: string | null } | null;
+};
 
 interface OrdersClientProps {
-  orders: Order[]
-  settings: StoreSettings
+  orders: Order[];
+  settings: StoreSettings;
 }
+
+const TIME_FILTERS = [
+  { value: "today", label: "Today" },
+  { value: "week", label: "Last 7 Days" },
+  { value: "month", label: "Last 30 Days" },
+  { value: "all", label: "All Time" },
+] as const;
+
+const SORT_OPTIONS = [
+  { value: "newest", label: "Newest First" },
+  { value: "oldest", label: "Oldest First" },
+  { value: "highest", label: "Highest Value" },
+  { value: "lowest", label: "Lowest Value" },
+] as const;
+
+const ORDER_TYPES = [
+  { value: "ALL", label: "All Types" },
+  { value: "DINE_IN", label: "🪑 Dine In" },
+  { value: "TAKEOUT", label: "🛍️ Takeout" },
+  { value: "DELIVERY", label: "🛵 Delivery" },
+] as const;
+
+const PAYMENT_FILTERS = [
+  { value: "ALL", label: "All Payments" },
+  { value: "CASH", label: "💵 Cash" },
+  { value: "CARD", label: "💳 Card" },
+  { value: "GCASH", label: "📱 GCash" },
+  { value: "MAYA", label: "💜 Maya" },
+] as const;
+
+// Statuses currently being handled in the kitchen
+const ACTIVE_STATUSES = ["PENDING", "PREPARING", "READY"];
 
 export function OrdersClient({
   orders: initialOrders,
   settings,
 }: OrdersClientProps) {
-  const [orders, setOrders] = useState(initialOrders)
-  const [filterStatus, setFilterStatus] = useState("ALL")
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
-  const [isPending, startTransition] = useTransition()
+  const [orders, setOrders] = useState(initialOrders);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [isPending, startTransition] = useTransition();
 
-  const filtered =
-    filterStatus === "ALL"
-      ? orders
-      : orders.filter((o) => o.status === filterStatus)
+  // Filters
+  const [search, setSearch] = useState("");
+  const [timeFilter, setTimeFilter] =
+    useState<"today" | "week" | "month" | "all">("today");
+  const [sortBy, setSortBy] =
+    useState<"newest" | "oldest" | "highest" | "lowest">("newest");
+  const [typeFilter, setTypeFilter] = useState("ALL");
+  const [paymentFilter, setPaymentFilter] = useState("ALL");
+  const [showFilters, setShowFilters] = useState(false);
 
-  const handleStatusChange = (id: string, status: string) => {
+  const filtered = useMemo(() => {
+    let result = [...orders];
+
+    // Time filter
+    const now = new Date();
+    if (timeFilter === "today") {
+      const start = new Date(now);
+      start.setHours(0, 0, 0, 0);
+      result = result.filter((o) => new Date(o.createdAt) >= start);
+    } else if (timeFilter === "week") {
+      const start = new Date(now);
+      start.setDate(start.getDate() - 6);
+      start.setHours(0, 0, 0, 0);
+      result = result.filter((o) => new Date(o.createdAt) >= start);
+    } else if (timeFilter === "month") {
+      const start = new Date(now);
+      start.setDate(start.getDate() - 29);
+      start.setHours(0, 0, 0, 0);
+      result = result.filter((o) => new Date(o.createdAt) >= start);
+    }
+
+    // Type filter
+    if (typeFilter !== "ALL")
+      result = result.filter((o) => o.type === typeFilter);
+
+    // Payment filter
+    if (paymentFilter !== "ALL")
+      result = result.filter((o) => o.paymentMethod === paymentFilter);
+
+    // Search: order number, customer name, or product names
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(
+        (o) =>
+          o.orderNumber.toLowerCase().includes(q) ||
+          o.customerName?.toLowerCase().includes(q) ||
+          o.items.some((i) => i.productName.toLowerCase().includes(q))
+      );
+    }
+
+    // Sort
+    if (sortBy === "newest")
+      result.sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    else if (sortBy === "oldest")
+      result.sort(
+        (a, b) =>
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+    else if (sortBy === "highest")
+      result.sort((a, b) => parseFloat(b.total) - parseFloat(a.total));
+    else if (sortBy === "lowest")
+      result.sort((a, b) => parseFloat(a.total) - parseFloat(b.total));
+
+    return result;
+  }, [orders, timeFilter, sortBy, typeFilter, paymentFilter, search]);
+
+  const handleCancel = (id: string) => {
     startTransition(async () => {
-      await updateOrderStatus(id, status)
+      await updateOrderStatus(id, "CANCELLED");
       setOrders((prev) =>
-        prev.map((o) => (o.id === id ? { ...o, status } : o))
-      )
+        prev.map((o) => (o.id === id ? { ...o, status: "CANCELLED" } : o))
+      );
       if (selectedOrder?.id === id) {
-        setSelectedOrder((prev) => (prev ? { ...prev, status } : null))
+        setSelectedOrder((prev) =>
+          prev ? { ...prev, status: "CANCELLED" } : null
+        );
       }
-    })
-  }
+    });
+  };
 
   const typeEmoji = (type: string) => {
-    if (type === "DINE_IN") return "🪑"
-    if (type === "TAKEOUT") return "🛍️"
-    return "🛵"
-  }
+    if (type === "DINE_IN") return "🪑";
+    if (type === "TAKEOUT") return "🛍️";
+    return "🛵";
+  };
 
   return (
     <div className="flex gap-5 h-full overflow-hidden">
       {/* Order list */}
-      <div className="flex-1 flex flex-col min-w-0 space-y-4 overflow-hidden">
-        {/* Filter pills */}
-        <div className="flex gap-2 flex-wrap shrink-0">
-          {["ALL", ...ALL_STATUSES].map((s) => (
-            <button
-              key={s}
-              onClick={() => setFilterStatus(s)}
-              className={`px-4 py-1.5 rounded-xl text-xs font-medium transition-all ${
-                filterStatus === s
-                  ? "bg-primary text-primary-foreground shadow-md"
-                  : "bg-card text-muted-foreground border border-border hover:bg-muted"
-              }`}
-            >
-              {s === "ALL" ? "All" : s}
-            </button>
-          ))}
-          <span className="ml-auto text-xs text-muted-foreground self-center">
-            {filtered.length} orders
+      <div className="flex-1 flex flex-col min-w-0 space-y-3 overflow-hidden">
+        {/* Search + Filter toggle */}
+        <div className="flex gap-2 shrink-0">
+          <div className="flex-1 relative">
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by order #, customer, or product…"
+              className="w-full bg-card border border-border rounded-xl pl-8 pr-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
+              showFilters
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-card border-border text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            <SlidersHorizontal size={13} />
+            Filters
+          </button>
+          <span className="self-center text-xs text-muted-foreground shrink-0">
+            {filtered.length} order{filtered.length !== 1 ? "s" : ""}
           </span>
         </div>
+
+        {/* Expanded filters */}
+        {showFilters && (
+          <div className="bg-card border border-border rounded-2xl p-4 space-y-3 shrink-0">
+            {/* Time */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Time Period
+              </p>
+              <div className="flex gap-1.5 flex-wrap">
+                {TIME_FILTERS.map(({ value, label }) => (
+                  <button
+                    key={value}
+                    onClick={() => setTimeFilter(value)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      timeFilter === value
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Sort */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                  Sort By
+                </p>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                  className="w-full bg-muted border border-border rounded-lg px-3 py-1.5 text-xs text-foreground focus:outline-none"
+                >
+                  {SORT_OPTIONS.map(({ value, label }) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Order type */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                  Order Type
+                </p>
+                <select
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  className="w-full bg-muted border border-border rounded-lg px-3 py-1.5 text-xs text-foreground focus:outline-none"
+                >
+                  {ORDER_TYPES.map(({ value, label }) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Payment */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                  Payment
+                </p>
+                <select
+                  value={paymentFilter}
+                  onChange={(e) => setPaymentFilter(e.target.value)}
+                  className="w-full bg-muted border border-border rounded-lg px-3 py-1.5 text-xs text-foreground focus:outline-none"
+                >
+                  {PAYMENT_FILTERS.map(({ value, label }) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Table */}
         <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden flex-1 flex flex-col">
@@ -162,14 +344,19 @@ export function OrdersClient({
                       </td>
                       <td className="px-5 py-4 text-right">
                         <span
-                          className={`text-xs px-2.5 py-1 rounded-full font-medium ${getStatusColor(order.status)}`}
+                          className={`text-xs px-2.5 py-1 rounded-full font-medium ${getStatusColor(
+                            order.status
+                          )}`}
                         >
                           {order.status}
                         </span>
                       </td>
                       <td className="px-5 py-4 text-right hidden md:table-cell">
                         <span className="text-primary font-bold text-sm">
-                          {formatCurrency(order.total, settings.currencySymbol)}
+                          {formatCurrency(
+                            order.total,
+                            settings.currencySymbol
+                          )}
                         </span>
                       </td>
                       <td className="px-5 py-4 text-right">
@@ -216,7 +403,9 @@ export function OrdersClient({
 
           <div className="flex gap-2 flex-wrap">
             <span
-              className={`text-xs px-2.5 py-1 rounded-full font-medium ${getStatusColor(selectedOrder.status)}`}
+              className={`text-xs px-2.5 py-1 rounded-full font-medium ${getStatusColor(
+                selectedOrder.status
+              )}`}
             >
               {selectedOrder.status}
             </span>
@@ -243,36 +432,41 @@ export function OrdersClient({
             <div className="border-t border-border pt-2 flex justify-between font-bold">
               <span className="text-foreground text-sm">Total</span>
               <span className="text-primary text-sm">
-                {formatCurrency(
-                  selectedOrder.total,
-                  settings.currencySymbol
-                )}
+                {formatCurrency(selectedOrder.total, settings.currencySymbol)}
               </span>
             </div>
           </div>
 
-          {/* Update status */}
-          <div className="border-t border-border pt-3">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-              Update Status
-            </p>
-            <div className="flex flex-col gap-1.5">
-              {ALL_STATUSES.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => handleStatusChange(selectedOrder.id, s)}
-                  disabled={isPending || selectedOrder.status === s}
-                  className={`py-2 rounded-xl text-xs font-medium transition-all ${
-                    selectedOrder.status === s
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
-                  }`}
+          {/* Kitchen redirect for active orders */}
+          {ACTIVE_STATUSES.includes(selectedOrder.status) && (
+            <div className="border-t border-border pt-3">
+              <p className="text-xs text-muted-foreground text-center leading-relaxed">
+                🍳 This order is being handled in the{" "}
+                <a
+                  href="/kitchen"
+                  className="text-primary underline underline-offset-2 font-medium"
                 >
-                  {s}
-                </button>
-              ))}
+                  Kitchen Display
+                </a>
+              </p>
             </div>
-          </div>
+          )}
+
+          {/* Cancel — only available for COMPLETED orders */}
+          {selectedOrder.status === "COMPLETED" && (
+            <div className="border-t border-border pt-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                Actions
+              </p>
+              <button
+                onClick={() => handleCancel(selectedOrder.id)}
+                disabled={isPending}
+                className="w-full py-2 rounded-xl text-xs font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 transition-all disabled:opacity-50"
+              >
+                Cancel Order
+              </button>
+            </div>
+          )}
 
           {selectedOrder.receiptToken && (
             <a
@@ -288,5 +482,5 @@ export function OrdersClient({
         </div>
       )}
     </div>
-  )
+  );
 }

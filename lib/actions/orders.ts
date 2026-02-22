@@ -57,7 +57,8 @@ export async function createOrder(input: CreateOrderInput) {
     .values({
       orderNumber,
       type: input.orderType,
-      status: "COMPLETED",
+      // Orders start as PENDING — kitchen will move them through the workflow
+      status: "PENDING",
       tableNumber: input.tableNumber ?? null,
       customerName: input.customerName ?? null,
       customerEmail: input.customerEmail ?? null,
@@ -72,7 +73,8 @@ export async function createOrder(input: CreateOrderInput) {
       changeAmount: changeAmount.toFixed(2),
       notes: input.notes ?? null,
       cashierId,
-      completedAt: new Date(),
+      // completedAt is null until kitchen marks it complete
+      completedAt: null,
     })
     .returning();
 
@@ -117,6 +119,7 @@ export async function createOrder(input: CreateOrderInput) {
   }
 
   revalidatePath("/orders");
+  revalidatePath("/kitchen");
   revalidatePath("/dashboard");
   revalidatePath("/inventory");
 
@@ -156,6 +159,7 @@ export async function updateOrderStatus(id: string, status: string) {
     .where(eq(orders.id, id))
     .returning();
   revalidatePath("/orders");
+  revalidatePath("/kitchen");
   return { success: true, data: order };
 }
 

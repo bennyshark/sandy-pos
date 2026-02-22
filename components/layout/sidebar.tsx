@@ -12,19 +12,21 @@ import {
   Coffee,
   Menu,
   X,
+  ChefHat,
 } from "lucide-react"
 import { signOut } from "next-auth/react"
 import { useState } from "react"
 
+// AFTER
 const navItems = [
-  { href: "/pos",       label: "POS Terminal",  icon: ShoppingCart },
-  { href: "/dashboard", label: "Dashboard",     icon: LayoutDashboard },
-  { href: "/orders",    label: "Orders",        icon: ClipboardList },
-  { href: "/menu",      label: "Menu & Items",  icon: Package },
-  { href: "/inventory", label: "Inventory",     icon: BarChart3 },
-  { href: "/settings",  label: "Settings",      icon: Settings },
+  { href: "/pos",       label: "POS Terminal",  icon: ShoppingCart,    roles: ["OWNER", "MANAGER", "CASHIER"] },
+  { href: "/kitchen",   label: "Kitchen View",  icon: ChefHat,         roles: ["OWNER", "MANAGER", "KITCHEN"] },
+  { href: "/dashboard", label: "Dashboard",     icon: LayoutDashboard, roles: ["OWNER", "MANAGER"] },
+  { href: "/orders",    label: "Orders",        icon: ClipboardList,   roles: ["OWNER", "MANAGER", "CASHIER"] },
+  { href: "/menu",      label: "Menu & Items",  icon: Package,         roles: ["OWNER", "MANAGER"] },
+  { href: "/inventory", label: "Inventory",     icon: BarChart3,       roles: ["OWNER", "MANAGER"] },
+  { href: "/settings",  label: "Settings",      icon: Settings,        roles: ["OWNER"] },
 ]
-
 export function Sidebar() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)

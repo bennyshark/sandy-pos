@@ -1,4 +1,4 @@
-export type UserRole = "OWNER" | "MANAGER" | "CASHIER"
+export type UserRole = "OWNER" | "MANAGER" | "CASHIER" | "KITCHEN"
 export type OrderStatus = "PENDING" | "PREPARING" | "READY" | "COMPLETED" | "CANCELLED"
 export type OrderType = "DINE_IN" | "TAKEOUT" | "DELIVERY"
 export type PaymentMethod = "CASH" | "CARD" | "GCASH" | "MAYA" | "OTHER"
