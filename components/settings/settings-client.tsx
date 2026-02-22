@@ -8,6 +8,47 @@ interface SettingsClientProps {
   initialSettings: StoreSettings
 }
 
+// ── Moved outside SettingsClient so React sees stable component references ──
+
+const inputClass =
+  "w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+
+function SectionCard({
+  title,
+  children,
+}: {
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="bg-card rounded-2xl border border-border shadow-sm p-6 space-y-4">
+      <h2 className="font-semibold text-foreground text-sm uppercase tracking-wide text-muted-foreground">
+        {title}
+      </h2>
+      {children}
+    </div>
+  )
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <div>
+      <label className="text-sm font-medium text-foreground mb-1.5 block">
+        {label}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+
 export function SettingsClient({ initialSettings }: SettingsClientProps) {
   const [s, setS] = useState(initialSettings)
   const [saved, setSaved] = useState(false)
@@ -34,39 +75,6 @@ export function SettingsClient({ initialSettings }: SettingsClientProps) {
       setTimeout(() => setSaved(false), 3000)
     })
   }
-
-  const inputClass =
-    "w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-
-  const SectionCard = ({
-    title,
-    children,
-  }: {
-    title: string
-    children: React.ReactNode
-  }) => (
-    <div className="bg-card rounded-2xl border border-border shadow-sm p-6 space-y-4">
-      <h2 className="font-semibold text-foreground text-sm uppercase tracking-wide text-muted-foreground">
-        {title}
-      </h2>
-      {children}
-    </div>
-  )
-
-  const Field = ({
-    label,
-    children,
-  }: {
-    label: string
-    children: React.ReactNode
-  }) => (
-    <div>
-      <label className="text-sm font-medium text-foreground mb-1.5 block">
-        {label}
-      </label>
-      {children}
-    </div>
-  )
 
   return (
     <div className="max-w-2xl space-y-5">

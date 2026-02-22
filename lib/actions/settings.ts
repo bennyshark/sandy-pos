@@ -3,6 +3,7 @@
 import { db } from "@/src/db";
 import { storeSettings } from "@/src/db/schema";
 import { revalidatePath } from "next/cache";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 const settingsSchema = z.object({
@@ -36,7 +37,7 @@ export async function updateStoreSettings(
   const [updated] = await db
     .update(storeSettings)
     .set({ ...parsed, updatedAt: new Date() })
-    .where(() => true as never)
+    .where(eq(storeSettings.id, existing.id))
     .returning();
 
   revalidatePath("/settings");
