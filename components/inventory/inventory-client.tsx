@@ -5,6 +5,7 @@ import {
   createInventoryItem,
   restockItem,
   deleteInventoryItem,
+  updateInventoryItem,
 } from "@/lib/actions/inventory"
 import {
   Plus,
@@ -14,6 +15,8 @@ import {
   Search,
   SlidersHorizontal,
   Minus,
+  Pencil,
+  Check,
 } from "lucide-react"
 import type { InventoryItem } from "@/types"
 
@@ -110,7 +113,7 @@ function AdjustModal({
 }: {
   item: InventoryItem
   onClose: () => void
-  onConfirm: (delta: number) => void
+  onConfirm: (delta: number, newMinStock: number) => void
   isPending: boolean
 }) {
   const currentStock = parseFloat(item.currentStock)
@@ -118,15 +121,22 @@ function AdjustModal({
 
   const [mode, setMode] = useState<AdjustMode>("adjust")
   const [inputVal, setInputVal] = useState("0")
+  const [minStockVal, setMinStockVal] = useState(String(Math.round(minStock)))
 
+  const parsedMin = parseInt(minStockVal, 10) || 0
   const parsed = parseInt(inputVal, 10) || 0
   const delta = mode === "adjust" ? parsed : parsed - currentStock
   const newStock = Math.max(0, mode === "adjust" ? currentStock + parsed : parsed)
-  const noChange = mode === "adjust" ? parsed === 0 : parsed === currentStock
-  const newStatus = getStockStatus(newStock, minStock)
+  const stockNoChange = mode === "adjust" ? parsed === 0 : parsed === currentStock
+  const minNoChange = parsedMin === Math.round(minStock)
+  const noChange = stockNoChange && minNoChange
+  const newStatus = getStockStatus(newStock, parsedMin)
 
   const step = (n: number) =>
     setInputVal(String((parseInt(inputVal, 10) || 0) + n))
+
+  const stepMin = (n: number) =>
+    setMinStockVal(String(Math.max(0, (parseInt(minStockVal, 10) || 0) + n)))
 
   const handleInput = (val: string) => {
     if (val === "" || val === "-") {
@@ -235,7 +245,7 @@ function AdjustModal({
               )}
             </div>
             <p className="text-xs text-center text-muted-foreground">
-              {noChange
+              {stockNoChange
                 ? "No change"
                 : mode === "adjust"
                 ? parsed > 0
@@ -245,13 +255,13 @@ function AdjustModal({
             </p>
           </div>
 
-          {/* Preview — shown only when there is a change */}
-          {!noChange && (
+          {/* Preview — shown only when there is a stock change */}
+          {!stockNoChange && (
             <div
               className={`flex items-center justify-between p-3 rounded-xl border ${
                 newStock === 0
                   ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
-                  : newStock <= minStock
+                  : newStock <= parsedMin
                   ? "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800"
                   : "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800"
               }`}
@@ -272,6 +282,61 @@ function AdjustModal({
               </span>
             </div>
           )}
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 py-1">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Min Stock Threshold</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+
+          {/* Min stock input */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => stepMin(-10)}
+                className="w-9 h-9 rounded-lg border border-border bg-muted hover:bg-muted/80 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors text-xs font-bold"
+              >
+                −10
+              </button>
+              <button
+                onClick={() => stepMin(-1)}
+                className="w-9 h-9 rounded-lg border border-border bg-muted hover:bg-muted/80 flex items-center justify-center transition-colors"
+              >
+                <Minus className="w-4 h-4 text-muted-foreground" />
+              </button>
+              <input
+                type="number"
+                value={minStockVal}
+                onChange={(e) => {
+                  const n = parseInt(e.target.value, 10)
+                  if (!isNaN(n) && n >= 0) setMinStockVal(String(n))
+                  else if (e.target.value === "") setMinStockVal("")
+                }}
+                min="0"
+                className="flex-1 h-11 rounded-xl border-2 border-yellow-300/60 bg-background text-center text-xl font-bold focus:outline-none focus:border-yellow-400 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              <button
+                onClick={() => stepMin(1)}
+                className="w-9 h-9 rounded-lg border border-border bg-muted hover:bg-muted/80 flex items-center justify-center transition-colors"
+              >
+                <Plus className="w-4 h-4 text-muted-foreground" />
+              </button>
+              <button
+                onClick={() => stepMin(10)}
+                className="w-9 h-9 rounded-lg border border-border bg-muted hover:bg-muted/80 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors text-xs font-bold"
+              >
+                +10
+              </button>
+            </div>
+            <p className="text-xs text-center text-muted-foreground">
+              {minNoChange
+                ? `Currently ${minStock} ${item.unit}(s) — no change`
+                : parsedMin > minStock
+                ? `Raising threshold from ${minStock} → ${parsedMin} ${item.unit}(s)`
+                : `Lowering threshold from ${minStock} → ${parsedMin} ${item.unit}(s)`}
+            </p>
+          </div>
         </div>
 
         {/* Footer */}
@@ -283,12 +348,12 @@ function AdjustModal({
             Cancel
           </button>
           <button
-            onClick={() => !noChange && onConfirm(delta)}
+            onClick={() => !noChange && onConfirm(delta, parsedMin)}
             disabled={noChange || isPending}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
               noChange
                 ? "bg-transparent text-muted-foreground cursor-default"
-                : delta > 0
+                : !stockNoChange && delta > 0
                 ? "bg-emerald-600 hover:bg-emerald-700 text-white"
                 : "bg-primary hover:bg-primary/90 text-primary-foreground"
             }`}
@@ -299,7 +364,15 @@ function AdjustModal({
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
             )}
-            {noChange ? "No Change" : mode === "set" ? "Set Stock" : delta > 0 ? "Add Stock" : "Remove Stock"}
+            {noChange
+              ? "No Change"
+              : stockNoChange
+              ? "Update Min Stock"
+              : mode === "set"
+              ? "Set Stock"
+              : delta > 0
+              ? "Add Stock"
+              : "Remove Stock"}
           </button>
         </div>
       </div>
@@ -398,6 +471,28 @@ export function InventoryClient({ initialItems }: InventoryClientProps) {
   const [search, setSearch] = useState("")
   const [adjustingItem, setAdjustingItem] = useState<InventoryItem | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [editingMinStockId, setEditingMinStockId] = useState<string | null>(null)
+  const [editingMinStockVal, setEditingMinStockVal] = useState("")
+
+  const handleMinStockEdit = useCallback((item: InventoryItem) => {
+    setEditingMinStockId(item.id)
+    setEditingMinStockVal(item.lowStockThreshold)
+  }, [])
+
+  const handleMinStockSave = useCallback(
+    (id: string) => {
+      const val = parseInt(editingMinStockVal, 10)
+      if (isNaN(val) || val < 0) { setEditingMinStockId(null); return }
+      startTransition(async () => {
+        await updateInventoryItem(id, { lowStockThreshold: String(val) })
+        setItems((prev) =>
+          prev.map((i) => (i.id === id ? { ...i, lowStockThreshold: String(val) } : i))
+        )
+        setEditingMinStockId(null)
+      })
+    },
+    [editingMinStockVal]
+  )
 
   const isLow = (item: InventoryItem) => {
     const s = parseFloat(item.currentStock)
@@ -423,16 +518,27 @@ export function InventoryClient({ initialItems }: InventoryClientProps) {
   }, [items, filter, search])
 
   const handleAdjust = useCallback(
-    (delta: number) => {
+    (delta: number, newMinStock: number) => {
       if (!adjustingItem) return
       const id = adjustingItem.id
+      const oldMin = parseFloat(adjustingItem.lowStockThreshold)
       startTransition(async () => {
-        await restockItem(id, delta)
+        if (delta !== 0) await restockItem(id, delta)
+        if (newMinStock !== Math.round(oldMin)) {
+          await updateInventoryItem(id, { lowStockThreshold: String(newMinStock) })
+        }
         const now = new Date()
         setItems((prev) =>
           prev.map((i) =>
             i.id === id
-              ? { ...i, currentStock: Math.max(0, parseFloat(i.currentStock) + delta).toFixed(2), updatedAt: now }
+              ? {
+                  ...i,
+                  currentStock: delta !== 0
+                    ? Math.max(0, parseFloat(i.currentStock) + delta).toFixed(2)
+                    : i.currentStock,
+                  lowStockThreshold: String(newMinStock),
+                  updatedAt: now,
+                }
               : i
           )
         )
@@ -556,9 +662,42 @@ export function InventoryClient({ initialItems }: InventoryClientProps) {
                       </div>
                     </td>
                     <td className="px-5 py-4 text-right">
-                      <span className="text-sm text-muted-foreground tabular-nums">
-                        {item.lowStockThreshold}
-                      </span>
+                      {editingMinStockId === item.id ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <input
+                            type="number"
+                            value={editingMinStockVal}
+                            onChange={(e) => setEditingMinStockVal(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleMinStockSave(item.id)
+                              if (e.key === "Escape") setEditingMinStockId(null)
+                            }}
+                            autoFocus
+                            min="0"
+                            className="w-16 h-7 rounded-lg border border-primary/50 bg-background text-center text-sm font-medium focus:outline-none focus:border-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          />
+                          <button
+                            onClick={() => handleMinStockSave(item.id)}
+                            className="p-1 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                          >
+                            <Check size={11} />
+                          </button>
+                          <button
+                            onClick={() => setEditingMinStockId(null)}
+                            className="p-1 rounded-md hover:bg-muted text-muted-foreground transition-colors"
+                          >
+                            <X size={11} />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleMinStockEdit(item)}
+                          className="group inline-flex items-center gap-1.5 text-sm text-muted-foreground tabular-nums hover:text-foreground transition-colors"
+                        >
+                          {item.lowStockThreshold}
+                          <Pencil size={11} className="opacity-0 group-hover:opacity-60 transition-opacity" />
+                        </button>
+                      )}
                     </td>
                     <td className="px-5 py-4 text-right">
                       <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium border ${status.bg}`}>
