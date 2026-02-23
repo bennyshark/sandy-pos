@@ -8,8 +8,10 @@ import {
   productIngredients,
   inventoryLogs,
   storeSettings,
+  categories,
+  products,
 } from "@/src/db/schema";
-import { eq, desc, and, gte, sql, count } from "drizzle-orm";
+import { eq, ne, desc, and, gte, sql, count } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { generateOrderNumber } from "@/lib/utils";
@@ -32,7 +34,6 @@ export async function createOrder(input: CreateOrderInput) {
   const session = await auth();
   const cashierId = session?.user?.id ?? null;
 
-  // Get settings for tax rate
   const [settings] = await db.select().from(storeSettings).limit(1);
   const taxRate = settings?.taxEnabled
     ? parseFloat(settings.taxRate ?? "0")
@@ -57,7 +58,6 @@ export async function createOrder(input: CreateOrderInput) {
     .values({
       orderNumber,
       type: input.orderType,
-      // Orders start as PENDING — kitchen will move them through the workflow
       status: "PENDING",
       tableNumber: input.tableNumber ?? null,
       customerName: input.customerName ?? null,
@@ -73,12 +73,10 @@ export async function createOrder(input: CreateOrderInput) {
       changeAmount: changeAmount.toFixed(2),
       notes: input.notes ?? null,
       cashierId,
-      // completedAt is null until kitchen marks it complete
       completedAt: null,
     })
     .returning();
 
-  // Insert order items
   await db.insert(orderItems).values(
     input.items.map((item) => ({
       orderId: order.id,
@@ -91,7 +89,6 @@ export async function createOrder(input: CreateOrderInput) {
     }))
   );
 
-  // Auto-deduct inventory for products with recipes
   for (const item of input.items) {
     const ingredients = await db
       .select()
@@ -163,39 +160,96 @@ export async function updateOrderStatus(id: string, status: string) {
   return { success: true, data: order };
 }
 
-export async function getDashboardStats() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+// ─── Range helpers ────────────────────────────────────────────────────────────
 
-  // Today totals
-  const [todayStats] = await db
+export type DashboardRange = "today" | "7d" | "30d" | "month";
+
+function getStartDate(range: DashboardRange): Date {
+  const now = new Date();
+  switch (range) {
+    case "today": {
+      const d = new Date(now);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    case "7d": {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 6);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    case "month": {
+      return new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+    case "30d":
+    default: {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 29);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+  }
+}
+
+// ─── Main stats query ─────────────────────────────────────────────────────────
+
+export async function getDashboardStats(range: DashboardRange = "today") {
+  const startDate = getStartDate(range);
+  const isToday = range === "today";
+
+  // Only COMPLETED orders count toward revenue/sales figures
+  const completedInRange = and(
+    eq(orders.status, "COMPLETED"),
+    gte(orders.createdAt, startDate)
+  );
+
+  // Payment method counts all active orders (pending → completed), excludes cancelled
+  const activeInRange = and(
+    ne(orders.status, "CANCELLED"),
+    gte(orders.createdAt, startDate)
+  );
+
+  // ── Summary totals ──────────────────────────────────────────────────────────
+  const [summary] = await db
     .select({
+      revenue: sql<number>`COALESCE(SUM(${orders.total}::numeric), 0)`,
+      grossSales: sql<number>`COALESCE(SUM(${orders.subtotal}::numeric), 0)`,
+      orderCount: count(orders.id),
+      totalDiscounts: sql<number>`COALESCE(SUM(${orders.discountAmount}::numeric), 0)`,
+      ordersWithDiscount: sql<number>`COUNT(*) FILTER (WHERE ${orders.discountAmount}::numeric > 0)`,
+      totalTax: sql<number>`COALESCE(SUM(${orders.taxAmount}::numeric), 0)`,
+    })
+    .from(orders)
+    .where(completedInRange);
+
+  const avgOrderValue =
+    Number(summary.orderCount) > 0
+      ? Number(summary.revenue) / Number(summary.orderCount)
+      : 0;
+
+  // ── Revenue by period (hourly for today, daily otherwise) ───────────────────
+  const periodExpr = isToday
+    ? sql`DATE_TRUNC('hour', ${orders.createdAt})`
+    : sql`DATE(${orders.createdAt})`;
+
+  const rawPeriods = await db
+    .select({
+      period: periodExpr.as("period"),
       revenue: sql<number>`COALESCE(SUM(${orders.total}::numeric), 0)`,
       orderCount: count(orders.id),
     })
     .from(orders)
-    .where(and(eq(orders.status, "COMPLETED"), gte(orders.createdAt, today)));
+    .where(completedInRange)
+    .groupBy(periodExpr)
+    .orderBy(periodExpr);
 
-  // Revenue last 7 days
-  const sevenDaysAgo = new Date(today);
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  const revenueByPeriod = rawPeriods.map((r) => ({
+    period: String(r.period),
+    revenue: Number(r.revenue),
+    orderCount: Number(r.orderCount),
+  }));
 
-  const revenueByDay = await db
-    .select({
-      date: sql<string>`DATE(${orders.createdAt})`,
-      revenue: sql<number>`COALESCE(SUM(${orders.total}::numeric), 0)`,
-    })
-    .from(orders)
-    .where(
-      and(eq(orders.status, "COMPLETED"), gte(orders.createdAt, sevenDaysAgo))
-    )
-    .groupBy(sql`DATE(${orders.createdAt})`)
-    .orderBy(sql`DATE(${orders.createdAt})`);
-
-  // Top items last 30 days
-  const thirtyDaysAgo = new Date(today);
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
-
+  // ── Top items by revenue ────────────────────────────────────────────────────
   const topItems = await db
     .select({
       name: orderItems.productName,
@@ -204,49 +258,62 @@ export async function getDashboardStats() {
     })
     .from(orderItems)
     .innerJoin(orders, eq(orderItems.orderId, orders.id))
-    .where(
-      and(eq(orders.status, "COMPLETED"), gte(orders.createdAt, thirtyDaysAgo))
-    )
+    .where(completedInRange)
     .groupBy(orderItems.productName)
-    .orderBy(desc(sql`SUM(${orderItems.quantity})`))
+    .orderBy(desc(sql`SUM(${orderItems.subtotal}::numeric)`))
     .limit(8);
 
-  // Order type breakdown
-  const orderTypeBreakdown = await db
-    .select({ type: orders.type, count: count(orders.id) })
+  // ── Revenue by category ─────────────────────────────────────────────────────
+  const categoryRevenue = await db
+    .select({
+      name: categories.name,
+      revenue: sql<number>`COALESCE(SUM(${orderItems.subtotal}::numeric), 0)`,
+      count: sql<number>`SUM(${orderItems.quantity})`,
+    })
+    .from(orderItems)
+    .innerJoin(orders, eq(orderItems.orderId, orders.id))
+    .innerJoin(products, eq(orderItems.productId, products.id))
+    .innerJoin(categories, eq(products.categoryId, categories.id))
+    .where(completedInRange)
+    .groupBy(categories.name)
+    .orderBy(desc(sql`SUM(${orderItems.subtotal}::numeric)`))
+    .limit(8);
+
+  // ── Payment method breakdown (all active: pending/preparing/ready/completed) ─
+  const paymentBreakdown = await db
+    .select({
+      method: orders.paymentMethod,
+      count: count(orders.id),
+      revenue: sql<number>`COALESCE(SUM(${orders.total}::numeric), 0)`,
+    })
     .from(orders)
-    .where(and(eq(orders.status, "COMPLETED"), gte(orders.createdAt, today)))
-    .groupBy(orders.type);
-
-  // Recent orders
-  const recentOrders = await db.query.orders.findMany({
-    with: { items: true },
-    orderBy: [desc(orders.createdAt)],
-    limit: 5,
-  });
-
-  const avgOrderValue =
-    Number(todayStats.orderCount) > 0
-      ? Number(todayStats.revenue) / Number(todayStats.orderCount)
-      : 0;
+    .where(activeInRange)
+    .groupBy(orders.paymentMethod);
 
   return {
-    todayRevenue: Number(todayStats.revenue),
-    todayOrders: Number(todayStats.orderCount),
+    revenue: Number(summary.revenue),
+    grossSales: Number(summary.grossSales),
+    orderCount: Number(summary.orderCount),
     avgOrderValue,
+    totalDiscounts: Number(summary.totalDiscounts),
+    ordersWithDiscount: Number(summary.ordersWithDiscount),
+    totalTax: Number(summary.totalTax),
+    revenueByPeriod,
+    isHourly: isToday,
     topItems: topItems.map((i) => ({
       name: i.name,
       count: Number(i.count),
       revenue: Number(i.revenue),
     })),
-    revenueByDay: revenueByDay.map((r) => ({
-      date: r.date,
-      revenue: Number(r.revenue),
+    categoryRevenue: categoryRevenue.map((c) => ({
+      name: c.name,
+      revenue: Number(c.revenue),
+      count: Number(c.count),
     })),
-    orderTypeBreakdown: orderTypeBreakdown.map((o) => ({
-      type: o.type,
-      count: Number(o.count),
+    paymentBreakdown: paymentBreakdown.map((p) => ({
+      method: p.method ?? "OTHER",
+      count: Number(p.count),
+      revenue: Number(p.revenue),
     })),
-    recentOrders: recentOrders as never,
   };
 }

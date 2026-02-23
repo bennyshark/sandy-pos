@@ -21,8 +21,8 @@ import { useState } from "react"
 const navItems = [
   { href: "/pos",       label: "POS Terminal",  icon: ShoppingCart,    roles: ["OWNER", "MANAGER", "CASHIER"] },
   { href: "/kitchen",   label: "Kitchen View",  icon: ChefHat,         roles: ["OWNER", "MANAGER", "KITCHEN"] },
-  { href: "/dashboard", label: "Dashboard",     icon: LayoutDashboard, roles: ["OWNER", "MANAGER"] },
   { href: "/orders",    label: "Orders",        icon: ClipboardList,   roles: ["OWNER", "MANAGER", "CASHIER"] },
+  { href: "/dashboard", label: "Dashboard",     icon: LayoutDashboard, roles: ["OWNER", "MANAGER"] },
   { href: "/menu",      label: "Menu & Items",  icon: Package,         roles: ["OWNER", "MANAGER"] },
   { href: "/inventory", label: "Inventory",     icon: BarChart3,       roles: ["OWNER", "MANAGER"] },
   { href: "/settings",  label: "Settings",      icon: Settings,        roles: ["OWNER"] },

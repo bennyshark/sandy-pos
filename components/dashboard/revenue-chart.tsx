@@ -1,4 +1,5 @@
 "use client"
+
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -22,17 +23,21 @@ ChartJS.register(
 )
 
 interface RevenueChartProps {
-  data: { date: string; revenue: number }[]
+  data: { period: string; revenue: number; orderCount: number }[]
+  isHourly: boolean
   settings: StoreSettings
 }
 
-export function RevenueChart({ data, settings }: RevenueChartProps) {
-  const labels = data.map((d) =>
-    new Date(d.date + "T00:00:00").toLocaleDateString("en-PH", {
-      month: "short",
-      day: "numeric",
-    })
-  )
+function formatPeriodLabel(period: string, isHourly: boolean): string {
+  const d = new Date(period)
+  if (isHourly) {
+    return d.toLocaleTimeString("en-PH", { hour: "numeric", hour12: true })
+  }
+  return d.toLocaleDateString("en-PH", { month: "short", day: "numeric" })
+}
+
+export function RevenueChart({ data, isHourly, settings }: RevenueChartProps) {
+  const labels = data.map((d) => formatPeriodLabel(d.period, isHourly))
 
   const chartData = {
     labels,
@@ -41,7 +46,12 @@ export function RevenueChart({ data, settings }: RevenueChartProps) {
         label: "Revenue",
         data: data.map((d) => d.revenue),
         borderColor: "#c2903a",
-        backgroundColor: (ctx: { chart: { ctx: CanvasRenderingContext2D; chartArea?: { top: number; bottom: number } } }) => {
+        backgroundColor: (ctx: {
+          chart: {
+            ctx: CanvasRenderingContext2D
+            chartArea?: { top: number; bottom: number }
+          }
+        }) => {
           const gradient = ctx.chart.ctx.createLinearGradient(
             0,
             ctx.chart.chartArea?.top ?? 0,
@@ -71,8 +81,13 @@ export function RevenueChart({ data, settings }: RevenueChartProps) {
       legend: { display: false },
       tooltip: {
         callbacks: {
-          label: (ctx: { raw: unknown }) =>
-            ` ${formatCurrency(ctx.raw as number, settings.currencySymbol)}`,
+          label: (ctx: { raw: unknown; dataIndex: number }) => {
+            const orders = data[ctx.dataIndex]?.orderCount ?? 0
+            return [
+              ` Revenue: ${formatCurrency(ctx.raw as number, settings.currencySymbol)}`,
+              ` Orders: ${orders}`,
+            ]
+          },
         },
         backgroundColor: "hsl(30 16% 12%)",
         titleColor: "hsl(40 35% 90%)",
@@ -106,14 +121,14 @@ export function RevenueChart({ data, settings }: RevenueChartProps) {
   return (
     <div className="bg-card rounded-2xl p-5 border border-border shadow-sm">
       <h3 className="font-semibold text-foreground mb-4 text-sm">
-        Revenue — Last 7 Days
+        {isHourly ? "Revenue — Hourly Breakdown" : "Revenue — By Day"}
       </h3>
       <div className="h-52">
         {data.length > 0 ? (
           <Line data={chartData} options={options as never} />
         ) : (
           <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
-            No revenue data yet
+            No revenue data for this period
           </div>
         )}
       </div>
