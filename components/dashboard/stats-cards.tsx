@@ -1,28 +1,32 @@
 import { formatCurrency } from "@/lib/utils"
-import { TrendingUp, ShoppingBag, DollarSign, BarChart2 } from "lucide-react"
-import type { DashboardStats, StoreSettings } from "@/types"
+import { TrendingUp, ShoppingBag, DollarSign, Tag } from "lucide-react"
+import type { StoreSettings } from "@/types"
 
 interface StatsCardsProps {
-  stats: DashboardStats
+  stats: {
+    revenue: number
+    grossSales: number
+    orderCount: number
+    avgOrderValue: number
+  }
   settings: StoreSettings
 }
 
 export function StatsCards({ stats, settings }: StatsCardsProps) {
   const sym = settings.currencySymbol
-  const totalItemsSold = stats.topItems.reduce((s, i) => s + i.count, 0)
 
   const cards = [
     {
-      title: "Today's Revenue",
-      value: formatCurrency(stats.todayRevenue, sym),
+      title: "Net Revenue",
+      value: formatCurrency(stats.revenue, sym),
       icon: DollarSign,
       bg: "bg-primary/10 dark:bg-primary/20",
       iconColor: "text-primary",
       border: "border-primary/20",
     },
     {
-      title: "Orders Today",
-      value: stats.todayOrders.toString(),
+      title: "Orders",
+      value: stats.orderCount.toString(),
       icon: ShoppingBag,
       bg: "bg-blue-100 dark:bg-blue-900/30",
       iconColor: "text-blue-600 dark:text-blue-400",
@@ -37,12 +41,12 @@ export function StatsCards({ stats, settings }: StatsCardsProps) {
       border: "border-green-200 dark:border-green-900",
     },
     {
-      title: "Items Sold (30d)",
-      value: totalItemsSold.toString(),
-      icon: BarChart2,
-      bg: "bg-purple-100 dark:bg-purple-900/30",
-      iconColor: "text-purple-600 dark:text-purple-400",
-      border: "border-purple-200 dark:border-purple-900",
+      title: "Gross Sales",
+      value: formatCurrency(stats.grossSales, sym),
+      icon: Tag,
+      bg: "bg-violet-100 dark:bg-violet-900/30",
+      iconColor: "text-violet-600 dark:text-violet-400",
+      border: "border-violet-200 dark:border-violet-900",
     },
   ]
 
@@ -65,9 +69,7 @@ export function StatsCards({ stats, settings }: StatsCardsProps) {
                 {card.value}
               </p>
             </div>
-            <div
-              className={`p-2.5 rounded-xl ${card.bg} shrink-0 ml-2`}
-            >
+            <div className={`p-2.5 rounded-xl ${card.bg} shrink-0 ml-2`}>
               <card.icon size={19} className={card.iconColor} />
             </div>
           </div>
