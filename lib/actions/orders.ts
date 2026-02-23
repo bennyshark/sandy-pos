@@ -1,16 +1,10 @@
 "use server";
 
 import { db } from "@/src/db";
-import {
-  orders,
-  orderItems,
-  inventoryItems,
-  productIngredients,
-  inventoryLogs,
-  storeSettings,
-  categories,
-  products,
-} from "@/src/db/schema";
+import { orders, orderItems } from "@/src/db/schema/orders";
+import { inventoryItems, productIngredients, inventoryLogs } from "@/src/db/schema/inventory";
+import { storeSettings } from "@/src/db/schema/settings";
+import { categories, products } from "@/src/db/schema/products";
 import { eq, ne, desc, and, gte, sql, count } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
@@ -162,52 +156,84 @@ export async function updateOrderStatus(id: string, status: string) {
 
 // ─── Range helpers ────────────────────────────────────────────────────────────
 
-export type DashboardRange = "today" | "7d" | "30d" | "month";
+export type DashboardRange = "today" | "7d" | "30d" | "month" | "year" | "all" | "custom";
 
-function getStartDate(range: DashboardRange): Date {
+export interface DashboardStatsOptions {
+  range: DashboardRange;
+  from?: string; // YYYY-MM  (month granularity, e.g. "2020-08")
+  to?: string;   // YYYY-MM  (month granularity, e.g. "2023-12")
+}
+
+function buildDateFilter(opts: DashboardStatsOptions) {
+  const { range, from, to } = opts;
+
+  if (range === "all") return null; // no date filter
+
+  if (range === "custom" && from) {
+    // from/to are "YYYY-MM" — parse to first/last day of that month
+    const [fy, fm] = from.split("-").map(Number);
+    const start = new Date(fy, fm - 1, 1); // first day of from-month
+    let end: Date;
+    if (to) {
+      const [ty, tm] = to.split("-").map(Number);
+      end = new Date(ty, tm, 0, 23, 59, 59, 999); // last day of to-month
+    } else {
+      end = new Date();
+    }
+    return { start, end };
+  }
+
   const now = new Date();
   switch (range) {
     case "today": {
       const d = new Date(now);
       d.setHours(0, 0, 0, 0);
-      return d;
+      return { start: d, end: now };
     }
     case "7d": {
       const d = new Date(now);
       d.setDate(d.getDate() - 6);
       d.setHours(0, 0, 0, 0);
-      return d;
+      return { start: d, end: now };
     }
     case "month": {
-      return new Date(now.getFullYear(), now.getMonth(), 1);
+      return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: now };
     }
+    case "year":
+      return { start: new Date(now.getFullYear(), 0, 1), end: now };
     case "30d":
     default: {
       const d = new Date(now);
       d.setDate(d.getDate() - 29);
       d.setHours(0, 0, 0, 0);
-      return d;
+      return { start: d, end: now };
     }
   }
 }
 
 // ─── Main stats query ─────────────────────────────────────────────────────────
 
-export async function getDashboardStats(range: DashboardRange = "today") {
-  const startDate = getStartDate(range);
-  const isToday = range === "today";
+export async function getDashboardStats(opts: DashboardStatsOptions = { range: "today" }) {
+  const dateFilter = buildDateFilter(opts);
+  const isToday = opts.range === "today";
 
   // Only COMPLETED orders count toward revenue/sales figures
-  const completedInRange = and(
-    eq(orders.status, "COMPLETED"),
-    gte(orders.createdAt, startDate)
-  );
+  const completedInRange = dateFilter
+    ? and(
+        eq(orders.status, "COMPLETED"),
+        gte(orders.createdAt, dateFilter.start),
+        sql`${orders.createdAt} <= ${dateFilter.end}`
+      )
+    : eq(orders.status, "COMPLETED");
 
-  // Payment method counts all active orders (pending → completed), excludes cancelled
-  const activeInRange = and(
-    ne(orders.status, "CANCELLED"),
-    gte(orders.createdAt, startDate)
-  );
+  // Payment method counts all active orders, excludes cancelled
+  const activeInRange = dateFilter
+    ? and(
+        ne(orders.status, "CANCELLED"),
+        gte(orders.createdAt, dateFilter.start),
+        sql`${orders.createdAt} <= ${dateFilter.end}`
+      )
+    : ne(orders.status, "CANCELLED");
 
   // ── Summary totals ──────────────────────────────────────────────────────────
   const [summary] = await db
@@ -227,10 +253,21 @@ export async function getDashboardStats(range: DashboardRange = "today") {
       ? Number(summary.revenue) / Number(summary.orderCount)
       : 0;
 
-  // ── Revenue by period (hourly for today, daily otherwise) ───────────────────
+  // ── Revenue by period: hourly today, daily ≤90d, monthly >90d ──────────────
+  // Compute actual span so "this month" stays daily and multi-year goes monthly
+  let isWideRange = false;
+  if (opts.range === "all") {
+    isWideRange = true;
+  } else if (dateFilter) {
+    const spanDays = (dateFilter.end.getTime() - dateFilter.start.getTime()) / 86_400_000;
+    isWideRange = spanDays > 90;
+  }
+
   const periodExpr = isToday
     ? sql`DATE_TRUNC('hour', ${orders.createdAt})`
-    : sql`DATE(${orders.createdAt})`;
+    : isWideRange
+      ? sql`DATE_TRUNC('month', ${orders.createdAt})`
+      : sql`DATE(${orders.createdAt})`;
 
   const rawPeriods = await db
     .select({
@@ -300,6 +337,7 @@ export async function getDashboardStats(range: DashboardRange = "today") {
     totalTax: Number(summary.totalTax),
     revenueByPeriod,
     isHourly: isToday,
+    isMonthly: isWideRange,
     topItems: topItems.map((i) => ({
       name: i.name,
       count: Number(i.count),

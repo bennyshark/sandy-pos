@@ -25,19 +25,24 @@ ChartJS.register(
 interface RevenueChartProps {
   data: { period: string; revenue: number; orderCount: number }[]
   isHourly: boolean
+  isMonthly?: boolean
+  periodLabel?: string
   settings: StoreSettings
 }
 
-function formatPeriodLabel(period: string, isHourly: boolean): string {
+function formatPeriodLabel(period: string, isHourly: boolean, isMonthly?: boolean): string {
   const d = new Date(period)
   if (isHourly) {
     return d.toLocaleTimeString("en-PH", { hour: "numeric", hour12: true })
   }
+  if (isMonthly) {
+    return d.toLocaleDateString("en-PH", { month: "short", year: "numeric" })
+  }
   return d.toLocaleDateString("en-PH", { month: "short", day: "numeric" })
 }
 
-export function RevenueChart({ data, isHourly, settings }: RevenueChartProps) {
-  const labels = data.map((d) => formatPeriodLabel(d.period, isHourly))
+export function RevenueChart({ data, isHourly, isMonthly, periodLabel, settings }: RevenueChartProps) {
+  const labels = data.map((d) => formatPeriodLabel(d.period, isHourly, isMonthly))
 
   const chartData = {
     labels,
@@ -120,9 +125,18 @@ export function RevenueChart({ data, isHourly, settings }: RevenueChartProps) {
 
   return (
     <div className="bg-card rounded-2xl p-5 border border-border shadow-sm">
-      <h3 className="font-semibold text-foreground mb-4 text-sm">
-        {isHourly ? "Revenue — Hourly Breakdown" : "Revenue — By Day"}
-      </h3>
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h3 className="font-semibold text-foreground text-sm">
+            {isHourly ? "Revenue Trend" : isMonthly ? "Revenue Trend" : "Revenue Trend"}
+          </h3>
+          {periodLabel && (
+            <span className="inline-block mt-1 text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+              {periodLabel}
+            </span>
+          )}
+        </div>
+      </div>
       <div className="h-52">
         {data.length > 0 ? (
           <Line data={chartData} options={options as never} />

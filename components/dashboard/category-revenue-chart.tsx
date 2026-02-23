@@ -15,6 +15,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip)
 
 interface CategoryRevenueChartProps {
   data: { name: string; revenue: number; count: number }[]
+  periodLabel?: string
   settings: StoreSettings
 }
 
@@ -23,7 +24,7 @@ const CAT_COLORS = [
   "#e05c8a", "#d47a34", "#4caf82", "#9b7fd4",
 ]
 
-export function CategoryRevenueChart({ data, settings }: CategoryRevenueChartProps) {
+export function CategoryRevenueChart({ data, periodLabel, settings }: CategoryRevenueChartProps) {
   const chartData = {
     labels: data.map((d) => d.name),
     datasets: [
@@ -82,10 +83,15 @@ export function CategoryRevenueChart({ data, settings }: CategoryRevenueChartPro
 
   return (
     <div className="bg-card rounded-2xl p-5 border border-border shadow-sm">
-      <h3 className="font-semibold text-foreground mb-1 text-sm">
-        Revenue by Category
-      </h3>
-      <p className="text-xs text-muted-foreground mb-3">Best-performing product lines</p>
+      <div className="mb-4">
+        <h3 className="font-semibold text-foreground text-sm">Revenue by Category</h3>
+        {periodLabel && (
+          <span className="inline-block mt-1 text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+            {periodLabel}
+          </span>
+        )}
+        <p className="text-[11px] text-muted-foreground mt-1">Best-performing product lines</p>
+      </div>
       <div className="h-52">
         {data.length > 0 ? (
           <Bar data={chartData} options={options as never} />

@@ -33,10 +33,11 @@ const METHOD_BORDER: Record<string, string> = {
 
 interface PaymentMethodChartProps {
   data: { method: string; count: number; revenue: number }[]
+  periodLabel?: string
   settings: StoreSettings
 }
 
-export function PaymentMethodChart({ data, settings }: PaymentMethodChartProps) {
+export function PaymentMethodChart({ data, periodLabel, settings }: PaymentMethodChartProps) {
   const sym = settings.currencySymbol
 
   const chartData = {
@@ -92,10 +93,15 @@ export function PaymentMethodChart({ data, settings }: PaymentMethodChartProps) 
 
   return (
     <div className="bg-card rounded-2xl p-5 border border-border shadow-sm">
-      <h3 className="font-semibold text-foreground mb-1 text-sm">
-        Payment Methods
-      </h3>
-      <p className="text-xs text-muted-foreground mb-3">Revenue split by tender type</p>
+      <div className="mb-4">
+        <h3 className="font-semibold text-foreground text-sm">Payment Methods</h3>
+        {periodLabel && (
+          <span className="inline-block mt-1 text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+            {periodLabel}
+          </span>
+        )}
+        <p className="text-[11px] text-muted-foreground mt-1">Revenue split by tender type</p>
+      </div>
       <div className="h-52">
         {data.length > 0 ? (
           <div className="relative h-full">

@@ -15,6 +15,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip)
 
 interface TopItemsChartProps {
   data: { name: string; count: number; revenue: number }[]
+  periodLabel?: string
   settings: StoreSettings
 }
 
@@ -23,7 +24,7 @@ const SANDY_COLORS = [
   "#835b22", "#a4752d", "#62431a", "#432e11",
 ]
 
-export function TopItemsChart({ data, settings }: TopItemsChartProps) {
+export function TopItemsChart({ data, periodLabel, settings }: TopItemsChartProps) {
   // Already sorted by revenue from the server
   const top = data.slice(0, 8)
 
@@ -82,9 +83,14 @@ export function TopItemsChart({ data, settings }: TopItemsChartProps) {
 
   return (
     <div className="bg-card rounded-2xl p-5 border border-border shadow-sm">
-      <h3 className="font-semibold text-foreground mb-4 text-sm">
-        Top Items by Revenue
-      </h3>
+      <div className="mb-4">
+        <h3 className="font-semibold text-foreground text-sm">Top Items by Revenue</h3>
+        {periodLabel && (
+          <span className="inline-block mt-1 text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+            {periodLabel}
+          </span>
+        )}
+      </div>
       <div className="h-52">
         {top.length > 0 ? (
           <Bar data={chartData} options={options as never} />
