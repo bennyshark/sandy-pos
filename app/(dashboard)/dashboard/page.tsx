@@ -55,7 +55,7 @@ interface DashboardPageProps {
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const { range: rawRange, from, to } = await searchParams
-  const range: DashboardRange = isValidRange(rawRange) ? rawRange : "today"
+  const range: DashboardRange = isValidRange(rawRange) ? rawRange : "year"
 
   const periodLabel = buildPeriodLabel(range, from, to)
 
