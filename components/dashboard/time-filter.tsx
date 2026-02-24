@@ -52,7 +52,7 @@ export function TimeFilter({ current, currentFrom, currentTo }: TimeFilterProps)
     setFrom("")
     setTo("")
     setShowCustom(false)
-    push("today")
+    push("year")
   }
 
   const isCustomActive = current === "custom"
