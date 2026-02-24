@@ -41,6 +41,29 @@ function formatPeriodLabel(period: string, isHourly: boolean, isMonthly?: boolea
   return d.toLocaleDateString("en-PH", { month: "short", day: "numeric" })
 }
 
+const crosshairPlugin = {
+  id: "crosshair",
+  afterDraw(chart: ChartJS) {
+    const { ctx, chartArea, scales } = chart
+    const active = chart.tooltip?.getActiveElements?.()
+    if (!active || active.length === 0) return
+
+    const x = (scales.x as { getPixelForValue: (v: number) => number }).getPixelForValue(
+      active[0].index
+    )
+
+    ctx.save()
+    ctx.beginPath()
+    ctx.moveTo(x, chartArea.top)
+    ctx.lineTo(x, chartArea.bottom)
+    ctx.lineWidth = 1.5
+    ctx.strokeStyle = "rgba(194,144,58,0.5)"
+    ctx.setLineDash([4, 4])
+    ctx.stroke()
+    ctx.restore()
+  },
+}
+
 export function RevenueChart({ data, isHourly, isMonthly, periodLabel, settings }: RevenueChartProps) {
   const labels = data.map((d) => formatPeriodLabel(d.period, isHourly, isMonthly))
 
@@ -82,6 +105,10 @@ export function RevenueChart({ data, isHourly, isMonthly, periodLabel, settings 
   const options = {
     responsive: true,
     maintainAspectRatio: false,
+    interaction: {
+      mode: "index" as const,
+      intersect: false,
+    },
     plugins: {
       legend: { display: false },
       tooltip: {
@@ -127,9 +154,7 @@ export function RevenueChart({ data, isHourly, isMonthly, periodLabel, settings 
     <div className="bg-card rounded-2xl p-5 border border-border shadow-sm">
       <div className="flex items-start justify-between mb-4">
         <div>
-          <h3 className="font-semibold text-foreground text-sm">
-            {isHourly ? "Revenue Trend" : isMonthly ? "Revenue Trend" : "Revenue Trend"}
-          </h3>
+          <h3 className="font-semibold text-foreground text-sm">Revenue Trend</h3>
           {periodLabel && (
             <span className="inline-block mt-1 text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
               {periodLabel}
@@ -139,7 +164,11 @@ export function RevenueChart({ data, isHourly, isMonthly, periodLabel, settings 
       </div>
       <div className="h-52">
         {data.length > 0 ? (
-          <Line data={chartData} options={options as never} />
+          <Line
+            data={chartData}
+            options={options as never}
+            plugins={[crosshairPlugin as never]}
+          />
         ) : (
           <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
             No revenue data for this period
