@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const nextConfig = {
+const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       {
@@ -9,6 +9,12 @@ const nextConfig = {
       },
     ],
   },
-}
+  experimental: {
+    staleTimes: {
+      dynamic: 60,  // client reuses dynamic pages for 60s before re-fetching
+      static: 300,  // static pages kept for 5 min
+    },
+  },
+};
 
-export default nextConfig
+export default nextConfig;

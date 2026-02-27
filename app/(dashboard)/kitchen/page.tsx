@@ -1,15 +1,21 @@
+import { Suspense } from "react"
 import { getKitchenOrders } from "@/lib/actions/orders"
 import { KitchenClient } from "@/components/kitchen/kitchen-client"
+import { KitchenPageSkeleton } from "@/components/ui/skeletons"
 
 export const metadata = { title: "Kitchen View" }
-export const revalidate = 30
 
-export default async function KitchenPage() {
+async function KitchenData() {
   const kitchenOrders = await getKitchenOrders()
+  return <KitchenClient orders={kitchenOrders as never} />
+}
 
+export default function KitchenPage() {
   return (
     <div className="flex flex-col h-full bg-background">
-      <KitchenClient orders={kitchenOrders as never} />
+      <Suspense fallback={<KitchenPageSkeleton />}>
+        <KitchenData />
+      </Suspense>
     </div>
   )
 }
