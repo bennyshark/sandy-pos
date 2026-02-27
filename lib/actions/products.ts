@@ -1,5 +1,6 @@
 "use server";
 
+import { cache } from "react";
 import { db } from "@/src/db";
 import { categories, products } from "@/src/db/schema";
 import { eq, asc } from "drizzle-orm";
@@ -24,14 +25,31 @@ const productSchema = z.object({
   sortOrder: z.number().default(0),
 });
 
-// ── Categories ──────────────────────────────────────────
+// ─── Cached reads ─────────────────────────────────────────────────────────────
 
-export async function getCategories() {
+export const getCategories = cache(async () => {
   return db
     .select()
     .from(categories)
     .orderBy(asc(categories.sortOrder), asc(categories.name));
-}
+});
+
+export const getProducts = cache(async () => {
+  return db.query.products.findMany({
+    with: { category: true },
+    orderBy: [asc(products.sortOrder), asc(products.name)],
+  });
+});
+
+export const getAvailableProducts = cache(async () => {
+  return db.query.products.findMany({
+    where: eq(products.isAvailable, true),
+    with: { category: true },
+    orderBy: [asc(products.sortOrder), asc(products.name)],
+  });
+});
+
+// ─── Category mutations ───────────────────────────────────────────────────────
 
 export async function createCategory(data: z.infer<typeof categorySchema>) {
   const parsed = categorySchema.parse(data);
@@ -41,10 +59,7 @@ export async function createCategory(data: z.infer<typeof categorySchema>) {
   return { success: true, data: cat };
 }
 
-export async function updateCategory(
-  id: string,
-  data: Partial<z.infer<typeof categorySchema>>
-) {
+export async function updateCategory(id: string, data: Partial<z.infer<typeof categorySchema>>) {
   const [cat] = await db
     .update(categories)
     .set(data)
@@ -62,22 +77,7 @@ export async function deleteCategory(id: string) {
   return { success: true };
 }
 
-// ── Products ────────────────────────────────────────────
-
-export async function getProducts() {
-  return db.query.products.findMany({
-    with: { category: true },
-    orderBy: [asc(products.sortOrder), asc(products.name)],
-  });
-}
-
-export async function getAvailableProducts() {
-  return db.query.products.findMany({
-    where: eq(products.isAvailable, true),
-    with: { category: true },
-    orderBy: [asc(products.sortOrder), asc(products.name)],
-  });
-}
+// ─── Product mutations ────────────────────────────────────────────────────────
 
 export async function createProduct(data: z.infer<typeof productSchema>) {
   const parsed = productSchema.parse(data);
@@ -85,8 +85,8 @@ export async function createProduct(data: z.infer<typeof productSchema>) {
     .insert(products)
     .values({
       ...parsed,
-      categoryId: parsed.categoryId ?? null,
-      imageUrl: parsed.imageUrl ?? null,
+      categoryId:  parsed.categoryId  ?? null,
+      imageUrl:    parsed.imageUrl    ?? null,
       description: parsed.description ?? null,
     })
     .returning();
@@ -95,10 +95,7 @@ export async function createProduct(data: z.infer<typeof productSchema>) {
   return { success: true, data: product };
 }
 
-export async function updateProduct(
-  id: string,
-  data: Partial<z.infer<typeof productSchema>>
-) {
+export async function updateProduct(id: string, data: Partial<z.infer<typeof productSchema>>) {
   const [product] = await db
     .update(products)
     .set({ ...data, updatedAt: new Date() })
@@ -116,10 +113,7 @@ export async function deleteProduct(id: string) {
   return { success: true };
 }
 
-export async function toggleProductAvailability(
-  id: string,
-  isAvailable: boolean
-) {
+export async function toggleProductAvailability(id: string, isAvailable: boolean) {
   const [product] = await db
     .update(products)
     .set({ isAvailable, updatedAt: new Date() })

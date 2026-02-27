@@ -1,5 +1,6 @@
 "use server";
 
+import { cache } from "react";
 import { db } from "@/src/db";
 import { inventoryItems, inventoryLogs } from "@/src/db/schema";
 import { eq, desc, sql } from "drizzle-orm";
@@ -15,22 +16,40 @@ const inventoryItemSchema = z.object({
   costPerUnit: z.string(),
 });
 
-export async function getInventoryItems() {
-  return db.select().from(inventoryItems).orderBy(inventoryItems.name);
-}
+// ─── Cached reads ─────────────────────────────────────────────────────────────
 
-export async function getLowStockItems() {
+export const getInventoryItems = cache(async () => {
+  return db.select().from(inventoryItems).orderBy(inventoryItems.name);
+});
+
+export const getLowStockItems = cache(async () => {
   return db
     .select()
     .from(inventoryItems)
     .where(
       sql`${inventoryItems.currentStock}::numeric <= ${inventoryItems.lowStockThreshold}::numeric`
     );
-}
+});
 
-export async function createInventoryItem(
-  data: z.infer<typeof inventoryItemSchema>
-) {
+export const getInventoryLogs = cache(async (itemId?: string) => {
+  if (itemId) {
+    return db.query.inventoryLogs.findMany({
+      where: eq(inventoryLogs.inventoryItemId, itemId),
+      with: { item: true, createdByUser: true },
+      orderBy: [desc(inventoryLogs.createdAt)],
+      limit: 50,
+    });
+  }
+  return db.query.inventoryLogs.findMany({
+    with: { item: true, createdByUser: true },
+    orderBy: [desc(inventoryLogs.createdAt)],
+    limit: 100,
+  });
+});
+
+// ─── Mutations ────────────────────────────────────────────────────────────────
+
+export async function createInventoryItem(data: z.infer<typeof inventoryItemSchema>) {
   const parsed = inventoryItemSchema.parse(data);
   const session = await auth();
 
@@ -46,13 +65,11 @@ export async function createInventoryItem(
   }
 
   revalidatePath("/inventory");
+  revalidatePath("/dashboard");
   return { success: true, data: item };
 }
 
-export async function updateInventoryItem(
-  id: string,
-  data: Partial<z.infer<typeof inventoryItemSchema>>
-) {
+export async function updateInventoryItem(id: string, data: Partial<z.infer<typeof inventoryItemSchema>>) {
   const [item] = await db
     .update(inventoryItems)
     .set({ ...data, updatedAt: new Date() })
@@ -91,11 +108,7 @@ export async function restockItem(id: string, amount: number, notes?: string) {
   return { success: true };
 }
 
-export async function adjustStock(
-  id: string,
-  newAmount: number,
-  notes?: string
-) {
+export async function adjustStock(id: string, newAmount: number, notes?: string) {
   const session = await auth();
   const [current] = await db
     .select()
@@ -120,20 +133,4 @@ export async function adjustStock(
 
   revalidatePath("/inventory");
   return { success: true };
-}
-
-export async function getInventoryLogs(itemId?: string) {
-  if (itemId) {
-    return db.query.inventoryLogs.findMany({
-      where: eq(inventoryLogs.inventoryItemId, itemId),
-      with: { item: true, createdByUser: true },
-      orderBy: [desc(inventoryLogs.createdAt)],
-      limit: 50,
-    });
-  }
-  return db.query.inventoryLogs.findMany({
-    with: { item: true, createdByUser: true },
-    orderBy: [desc(inventoryLogs.createdAt)],
-    limit: 100,
-  });
 }

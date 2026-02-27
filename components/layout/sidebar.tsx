@@ -1,6 +1,6 @@
-"use client"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
+"use client";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -13,23 +13,35 @@ import {
   Menu,
   X,
   ChefHat,
-} from "lucide-react"
-import { signOut } from "next-auth/react"
-import { useState } from "react"
+} from "lucide-react";
+import { signOut } from "next-auth/react";
+import { useState, useCallback } from "react";
 
-// AFTER
 const navItems = [
-  { href: "/pos",       label: "POS Terminal",  icon: ShoppingCart,    roles: ["OWNER", "MANAGER", "CASHIER"] },
-  { href: "/kitchen",   label: "Kitchen View",  icon: ChefHat,         roles: ["OWNER", "MANAGER", "KITCHEN"] },
-  { href: "/orders",    label: "Orders",        icon: ClipboardList,   roles: ["OWNER", "MANAGER", "CASHIER"] },
-  { href: "/dashboard", label: "Dashboard",     icon: LayoutDashboard, roles: ["OWNER", "MANAGER"] },
-  { href: "/menu",      label: "Menu & Items",  icon: Package,         roles: ["OWNER", "MANAGER"] },
-  { href: "/inventory", label: "Inventory",     icon: BarChart3,       roles: ["OWNER", "MANAGER"] },
-  { href: "/settings",  label: "Settings",      icon: Settings,        roles: ["OWNER"] },
-]
+  { href: "/pos",       label: "POS Terminal", icon: ShoppingCart,    roles: ["OWNER", "MANAGER", "CASHIER"] },
+  { href: "/kitchen",   label: "Kitchen View", icon: ChefHat,         roles: ["OWNER", "MANAGER", "KITCHEN"] },
+  { href: "/orders",    label: "Orders",       icon: ClipboardList,   roles: ["OWNER", "MANAGER", "CASHIER"] },
+  { href: "/dashboard", label: "Dashboard",    icon: LayoutDashboard, roles: ["OWNER", "MANAGER"] },
+  { href: "/menu",      label: "Menu & Items", icon: Package,         roles: ["OWNER", "MANAGER"] },
+  { href: "/inventory", label: "Inventory",    icon: BarChart3,       roles: ["OWNER", "MANAGER"] },
+  { href: "/settings",  label: "Settings",     icon: Settings,        roles: ["OWNER"] },
+];
+
 export function Sidebar() {
-  const pathname = usePathname()
-  const [mobileOpen, setMobileOpen] = useState(false)
+  const pathname = usePathname();
+  const router = useRouter();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  /**
+   * Prefetch a route when the user hovers over a nav link.
+   * Next.js Link already prefetches on viewport entry, but
+   * explicitly calling router.prefetch on hover is a nice belt-and-suspenders
+   * boost — especially useful for routes not yet in the viewport.
+   */
+  const handleMouseEnter = useCallback(
+    (href: string) => router.prefetch(href),
+    [router]
+  );
 
   return (
     <>
@@ -64,17 +76,12 @@ export function Sidebar() {
           <Link href="/pos" className="flex items-center gap-3 group">
             <div
               className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg transition-transform group-hover:scale-105"
-              style={{
-                background: "linear-gradient(135deg, #d4a958 0%, #a4752d 100%)",
-              }}
+              style={{ background: "linear-gradient(135deg, #d4a958 0%, #a4752d 100%)" }}
             >
               <Coffee size={18} className="text-white" />
             </div>
             <div>
-              <p
-                className="font-bold text-xl text-white leading-none"
-                style={{ fontFamily: "var(--font-display)" }}
-              >
+              <p className="font-bold text-xl text-white leading-none" style={{ fontFamily: "var(--font-display)" }}>
                 Sandy
               </p>
               <p className="text-white/40 text-[10px] mt-0.5 uppercase tracking-widest">
@@ -87,12 +94,13 @@ export function Sidebar() {
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {navItems.map(({ href, label, icon: Icon }) => {
-            const active =
-              pathname === href || pathname.startsWith(href + "/")
+            const active = pathname === href || pathname.startsWith(href + "/");
             return (
               <Link
                 key={href}
                 href={href}
+                prefetch={true}
+                onMouseEnter={() => handleMouseEnter(href)}
                 onClick={() => setMobileOpen(false)}
                 className={`
                   flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium
@@ -107,7 +115,7 @@ export function Sidebar() {
                 <Icon size={17} />
                 {label}
               </Link>
-            )
+            );
           })}
         </nav>
 
@@ -123,5 +131,5 @@ export function Sidebar() {
         </div>
       </aside>
     </>
-  )
+  );
 }
